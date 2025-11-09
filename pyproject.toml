@@ -1,7 +1,7 @@
 [project]
 name = "real-estate-ml-api"
 version = "0.1.0"
-description = "Add your description here"
+description = "a lightweight FastAPI-based backend service that predicts residential property prices based on numerical and categorical input features"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
