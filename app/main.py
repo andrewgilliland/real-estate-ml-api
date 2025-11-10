@@ -1,4 +1,11 @@
 import numpy as np
+from fastapi import FastAPI, HTTPException
+from app.schemas.house import (
+    HousePredictionRequest,
+    HousePredictionResponse,
+    HealthResponse,
+    VersionResponse,
+)
 
 
 def numpy_operations():
