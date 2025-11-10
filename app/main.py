@@ -1,14 +1,18 @@
 import numpy as np
 
+
 def numpy_operations():
     a = np.array([1, 2, 3])
     b = np.array([4, 5, 6])
-    array_1d = np.array([1,2,3,4])
-    array_2d = np.array([[1,2, 3],
-                         [3,4, 5]])    
-    array_3d = np.array([[[1,2,3],[4,5,6],[7,8,9]],
-                         [[5,6,7],[8,9, 10],[11,12,13]],
-                         [[9,10,11],[12,13,14],[15,16,17]]])
+    array_1d = np.array([1, 2, 3, 4])
+    array_2d = np.array([[1, 2, 3], [3, 4, 5]])
+    array_3d = np.array(
+        [
+            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+            [[5, 6, 7], [8, 9, 10], [11, 12, 13]],
+            [[9, 10, 11], [12, 13, 14], [15, 16, 17]],
+        ]
+    )
 
     print(np.__version__)
 
@@ -30,14 +34,13 @@ def numpy_operations():
     print("Accessed Element:", element)
 
     # Multidimensional indexing - faster than chain indexing
-    el = array_3d[1,2,0]
+    el = array_3d[1, 2, 0]
     print("Accessed Element (Multidimensional indexing):", el)
+
 
 def main():
     numpy_operations()
-   
+
 
 if __name__ == "__main__":
     main()
-
-
