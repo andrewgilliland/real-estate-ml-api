@@ -1,7 +1,20 @@
-# Core Requirements for train_model.py:
+from pandas import pd
+from pathlib import Path
 
-# 1. Data Loading & Preprocessing
-# Load the housing dataset from data/housing.csv
+
+def train_model():
+    # Core Requirements for train_model.py:
+    # 1. Data Loading & Preprocessing
+    # Load the housing dataset from data/housing.csv
+    print("Loading training data...")
+    data_path = Path("data/housing.csv")
+    if not data_path.exists():
+        raise FileNotFoundError(f"Training data not found at {data_path}")
+
+    df = pd.read_csv(data_path)
+    print(f"Loaded {len(df)} records.")
+
+
 # Handle missing values and data cleaning
 # Feature engineering (if needed)
 # Split features (X) from target variable (y - house prices)
