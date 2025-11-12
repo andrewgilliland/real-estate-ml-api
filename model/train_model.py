@@ -1,7 +1,11 @@
 from pandas import pd
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import r2_score, mean_absolute_error, root_mean_squared_error
+import joblib
 from pathlib import Path
+import json
+from datetime import datetime
 
 
 def train_model():
@@ -63,17 +67,67 @@ def train_model():
     # Fit the model to training data
     model.fit(train_features, train_prices)
 
+    # Make predictions on test set
+    predicted_prices = model.predict(test_features)
 
-# 4. Model Evaluation
-# Target R² ≥ 0.85 on test data (per success metrics)
-# Calculate R² score on test set
-# Generate other relevant metrics (MAE, RMSE)
-# Log performance metrics
+    # 4. Model Evaluation
+    # Calculate R² score on test set
+    r2 = r2_score(test_prices, predicted_prices)
+    print(f"Model R² on test set: {r2:.4f}")
+    # Target R² ≥ 0.85 on test data (per success metrics)
+    if r2 >= 0.85:
+        print("✅ Model meets accuracy target!")
+    else:
+        print("⚠️ Model needs improvement")
 
+    # Generate other relevant metrics (MAE, RMSE)
+    mae = mean_absolute_error(test_prices, predicted_prices)
+    rmse = root_mean_squared_error(test_prices, predicted_prices, squared=False)
+    print(f"Model MAE on test set: {mae:.4f}")
+    print(f"Model RMSE on test set: {rmse:.4f}")
 
-# 5. Model Persistence
-# Save the trained model to app/models/regressor.pkl using joblib
-# Save model metadata (version, training date, performance metrics)
+    # Log performance metrics
+
+    # Compare training vs test performance
+    training_r2 = model.score(train_features, train_prices)
+    testing_r2 = model.score(test_features, test_prices)
+
+    print(f"Training R²: {training_r2:.4f}")
+    print(f"Testing R²: {testing_r2:.4f}")
+    print(f"Gap: {training_r2 - testing_r2:.4f}")
+
+    # Good: Gap < 0.05
+    # Warning: Gap > 0.10
+    # Overfitting: Gap > 0.15
+
+    # 5. Model Persistence
+    # Save the trained model to app/models/regressor.pkl using joblib
+    # Save model metadata (version, training date, performance metrics)
+    # Save the trained model
+    model_dir = Path("app/models")
+    model_dir.mkdir(parents=True, exist_ok=True)
+    # Save model file
+    joblib.dump(model, model_dir / "regressor.pkl")
+
+    # Save comprehensive metadata
+    metadata = {
+        "model_version": "1.0.0",
+        "model_type": "RandomForestRegressor",
+        "trained_on": datetime.now().isoformat(),
+        "training_samples": len(df),
+        "features": feature_columns,
+        "performance": {
+            "training_r2": float(training_r2),
+            "testing_r2": float(testing_r2),
+            "mae": float(mae),
+            "rmse": float(rmse),
+        },
+        "hyperparameters": {"n_estimators": 100, "max_depth": 10, "random_state": 42},
+        "feature_importance": dict(zip(feature_columns, model.feature_importances_)),
+    }
+
+    with open(model_dir / "metadata.json", "w") as f:
+        json.dump(metadata, f, indent=2)
 
 
 # 6. Feature Schema Validation
