@@ -29,22 +29,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global variables
-model = None
-metadata = {}
+# Use app.state for Lambda compatibility
+app.state.model = None
+app.state.metadata = {}
 
 
 @app.on_event("startup")
 async def load_model():
     """Load the trained model and metadata on startup"""
-    global model, metadata
 
     model_path = Path("app/models/regressor.pkl")
     metadata_path = Path("app/models/metadata.json")
 
     try:
         if model_path.exists():
-            model = joblib.load(model_path)
+            app.state.model = joblib.load(model_path)
             print("✅ Model loaded successfully")
         else:
             print(
@@ -53,9 +52,9 @@ async def load_model():
 
         if metadata_path.exists():
             with open(metadata_path, "r") as f:
-                metadata = json.load(f)
+                app.state.metadata = json.load(f)
             print(
-                f"✅ Model metadata loaded: v{metadata.get('model_version', 'unknown')}"
+                f"✅ Model metadata loaded: v{app.state.metadata.get('model_version', 'unknown')}"
             )
 
     except Exception as e:
@@ -66,7 +65,7 @@ async def load_model():
 async def predict_price(request: HousePredictionRequest):
     """Predict house price based on input features"""
 
-    if model is None:
+    if app.state.model is None:
         raise HTTPException(
             status_code=503, detail="Model not loaded. Please train a model first."
         )
@@ -87,11 +86,11 @@ async def predict_price(request: HousePredictionRequest):
         )
 
         # Make prediction
-        prediction = model.predict(features)[0]
+        prediction = app.state.model.predict(features)[0]
 
         return HousePredictionResponse(
             predicted_price=round(float(prediction), 2),
-            model_version=metadata.get("model_version", "unknown"),
+            model_version=app.state.metadata.get("model_version", "unknown"),
             timestamp=datetime.now().isoformat(),
         )
 
@@ -102,15 +101,15 @@ async def predict_price(request: HousePredictionRequest):
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint"""
-    return HealthResponse(status="ok" if model is not None else "degraded")
+    return HealthResponse(status="ok" if app.state.model is not None else "degraded")
 
 
 @app.get("/version", response_model=VersionResponse)
 async def get_version():
     """Get model version and metadata"""
     return VersionResponse(
-        model_version=metadata.get("model_version", "unknown"),
-        trained_on=metadata.get("trained_on"),
+        model_version=app.state.metadata.get("model_version", "unknown"),
+        trained_on=app.state.metadata.get("trained_on"),
         model_type="RandomForestRegressor",
     )
 
