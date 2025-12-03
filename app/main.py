@@ -1,5 +1,11 @@
-import numpy as np
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+import joblib
+import json
+import pandas as pd
+from pathlib import Path
+from datetime import datetime
+
 from app.schemas.house import (
     HousePredictionRequest,
     HousePredictionResponse,
@@ -7,47 +13,118 @@ from app.schemas.house import (
     VersionResponse,
 )
 
+# Initialize FastAPI app
+app = FastAPI(
+    title="Real Estate ML API",
+    description="A lightweight FastAPI-based backend service that predicts residential property prices",
+    version="1.0.0",
+)
 
-def numpy_operations():
-    a = np.array([1, 2, 3])
-    b = np.array([4, 5, 6])
-    array_1d = np.array([1, 2, 3, 4])
-    array_2d = np.array([[1, 2, 3], [3, 4, 5]])
-    array_3d = np.array(
-        [
-            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
-            [[5, 6, 7], [8, 9, 10], [11, 12, 13]],
-            [[9, 10, 11], [12, 13, 14], [15, 16, 17]],
-        ]
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Global variables
+model = None
+metadata = {}
+
+
+@app.on_event("startup")
+async def load_model():
+    """Load the trained model and metadata on startup"""
+    global model, metadata
+
+    model_path = Path("app/models/regressor.pkl")
+    metadata_path = Path("app/models/metadata.json")
+
+    try:
+        if model_path.exists():
+            model = joblib.load(model_path)
+            print("✅ Model loaded successfully")
+        else:
+            print(
+                "⚠️  Model file not found. Train a model first using 'uv run python model/train_model.py'"
+            )
+
+        if metadata_path.exists():
+            with open(metadata_path, "r") as f:
+                metadata = json.load(f)
+            print(
+                f"✅ Model metadata loaded: v{metadata.get('model_version', 'unknown')}"
+            )
+
+    except Exception as e:
+        print(f"❌ Error loading model: {e}")
+
+
+@app.post("/predict", response_model=HousePredictionResponse)
+async def predict_price(request: HousePredictionRequest):
+    """Predict house price based on input features"""
+
+    if model is None:
+        raise HTTPException(
+            status_code=503, detail="Model not loaded. Please train a model first."
+        )
+
+    try:
+        # Convert request to DataFrame
+        features = pd.DataFrame(
+            [
+                {
+                    "bedrooms": request.bedrooms,
+                    "bathrooms": request.bathrooms,
+                    "sqft_living": request.sqft_living,
+                    "sqft_lot": request.sqft_lot,
+                    "floors": request.floors,
+                    "zipcode": request.zipcode,
+                }
+            ]
+        )
+
+        # Make prediction
+        prediction = model.predict(features)[0]
+
+        return HousePredictionResponse(
+            predicted_price=round(float(prediction), 2),
+            model_version=metadata.get("model_version", "unknown"),
+            timestamp=datetime.now().isoformat(),
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
+
+
+@app.get("/health", response_model=HealthResponse)
+async def health_check():
+    """Health check endpoint"""
+    return HealthResponse(status="ok" if model is not None else "degraded")
+
+
+@app.get("/version", response_model=VersionResponse)
+async def get_version():
+    """Get model version and metadata"""
+    return VersionResponse(
+        model_version=metadata.get("model_version", "unknown"),
+        trained_on=metadata.get("trained_on"),
+        model_type="RandomForestRegressor",
     )
 
-    print(np.__version__)
 
-    print("Sum of arrays:", a + b)
-
-    print("1D Numpy Array:", array_1d)
-
-    print("2D Numpy Array:", array_2d)
-    print("2D Array Dimensions:", array_2d.ndim)
-    print("Array Shape:", array_2d.shape)
-    print("Array Data Type:", array_2d.dtype)
-
-    print("3D Numpy Array:", array_3d)
-    print("3D Array Dimensions:", array_3d.ndim)
-    print("3D Array Shape:", array_3d.shape)
-
-    # Chain indexing
-    element = array_3d[1][2][0]  # [matrix 1, row 2, column 0]
-    print("Accessed Element:", element)
-
-    # Multidimensional indexing - faster than chain indexing
-    el = array_3d[1, 2, 0]
-    print("Accessed Element (Multidimensional indexing):", el)
-
-
-def main():
-    numpy_operations()
-
-
-if __name__ == "__main__":
-    main()
+@app.get("/")
+async def root():
+    """Root endpoint with API information"""
+    return {
+        "message": "Real Estate ML API",
+        "version": "1.0.0",
+        "docs": "/docs",
+        "endpoints": {
+            "predict": "POST /predict",
+            "health": "GET /health",
+            "version": "GET /version",
+        },
+    }

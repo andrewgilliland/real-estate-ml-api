@@ -1,11 +1,16 @@
-from pandas import pd
+import pandas as pd
+import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import r2_score, mean_absolute_error, root_mean_squared_error
+from sklearn.metrics import (
+    r2_score,
+    mean_absolute_error,
+    mean_squared_error,
+)
 import joblib
-from pathlib import Path
 import json
 from datetime import datetime
+from pathlib import Path
 
 
 def train_model():
@@ -82,7 +87,7 @@ def train_model():
 
     # Generate other relevant metrics (MAE, RMSE)
     mae = mean_absolute_error(test_prices, predicted_prices)
-    rmse = root_mean_squared_error(test_prices, predicted_prices, squared=False)
+    rmse = np.sqrt(mean_squared_error(test_prices, predicted_prices))
     print(f"Model MAE on test set: {mae:.4f}")
     print(f"Model RMSE on test set: {rmse:.4f}")
 
@@ -129,6 +134,13 @@ def train_model():
     with open(model_dir / "metadata.json", "w") as f:
         json.dump(metadata, f, indent=2)
 
+    print(f"✅ Model saved to: {model_dir / 'regressor.pkl'}")
+    print(f"✅ Metadata saved to: {model_dir / 'metadata.json'}")
+    print("\n🎉 Model training completed successfully!")
+    print("🚀 Next step: Run 'uv run uvicorn app.main:app --reload'")
+
+    return model, metadata
+
 
 # 6. Feature Schema Validation
 # Ensure the model expects the same features defined in the API schema:
@@ -145,3 +157,11 @@ def train_model():
 # Set model version (referenced in /version endpoint)
 # Track training timestamp
 # The file should be executable as a standalone script and integrate with the data preprocessing utilities in app/utils/preprocess.py to ensure consistency between training and prediction phases.
+
+
+if __name__ == "__main__":
+    try:
+        model, metadata = train_model()
+    except Exception as e:
+        print(f"❌ Training failed: {e}")
+        raise

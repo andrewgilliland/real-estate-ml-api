@@ -1,0 +1,33 @@
+{
+  "model_version": "1.0.0",
+  "model_type": "RandomForestRegressor",
+  "trained_on": "2025-12-02T21:06:00.663468",
+  "training_samples": 10,
+  "features": [
+    "bedrooms",
+    "bathrooms",
+    "sqft_living",
+    "sqft_lot",
+    "floors",
+    "zipcode"
+  ],
+  "performance": {
+    "training_r2": 0.9119937894309117,
+    "testing_r2": -3.936768,
+    "mae": 55200.0,
+    "rmse": 55547.0971338737
+  },
+  "hyperparameters": {
+    "n_estimators": 100,
+    "max_depth": 10,
+    "random_state": 42
+  },
+  "feature_importance": {
+    "bedrooms": 0.21057717395413938,
+    "bathrooms": 0.08866971595080642,
+    "sqft_living": 0.213463367551706,
+    "sqft_lot": 0.27104268783427204,
+    "floors": 0.1236800566039865,
+    "zipcode": 0.09256699810508966
+  }
+}
