@@ -17,6 +17,21 @@ echo "1️⃣ Checking S3 bucket..."
 if ! aws s3 ls "s3://$BUCKET_NAME" 2>&1 > /dev/null; then
     echo "   Creating bucket $BUCKET_NAME..."
     aws s3 mb "s3://$BUCKET_NAME" --region "$AWS_REGION"
+    
+    # Enable versioning
+    aws s3api put-bucket-versioning \
+        --bucket "$BUCKET_NAME" \
+        --versioning-configuration Status=Enabled \
+        --region "$AWS_REGION"
+    
+    # Block public access
+    aws s3api put-public-access-block \
+        --bucket "$BUCKET_NAME" \
+        --public-access-block-configuration \
+        "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true" \
+        --region "$AWS_REGION"
+    
+    echo "   ✅ Bucket created and configured"
 else
     echo "   ✅ Bucket already exists"
 fi
@@ -48,9 +63,7 @@ pip install \
 cd layer
 zip -r ../sklearn-layer.zip python > /dev/null
 cd ..
-aws s3 cp sklearn-layer.zip "s3://$BUCKET_NAME/layers/sklearn-layer.zip"
-rm sklearn-layer.zip
-echo "   ✅ Layer created and uploaded"
+echo "   ✅ Layer package created"
 
 # Package Lambda function
 echo "4️⃣ Packaging Lambda function..."
@@ -72,12 +85,17 @@ pip install \
 cd package
 zip -r ../lambda-package.zip . > /dev/null
 cd ..
+echo "   ✅ Lambda package created"
+
+# Upload Lambda artifacts to S3
+echo "5️⃣ Uploading Lambda artifacts..."
+aws s3 cp sklearn-layer.zip "s3://$BUCKET_NAME/layers/sklearn-layer.zip"
 aws s3 cp lambda-package.zip "s3://$BUCKET_NAME/lambda-package.zip"
-rm lambda-package.zip
-echo "   ✅ Lambda package uploaded"
+rm sklearn-layer.zip lambda-package.zip
+echo "   ✅ Artifacts uploaded"
 
 # Deploy CloudFormation stack
-echo "5️⃣ Deploying CloudFormation stack..."
+echo "6️⃣ Deploying CloudFormation stack..."
 aws cloudformation deploy \
     --template-file cloudformation/template.yaml \
     --stack-name "$STACK_NAME" \
@@ -86,7 +104,7 @@ aws cloudformation deploy \
     --region "$AWS_REGION"
 
 # Get API URL
-echo "6️⃣ Retrieving API URL..."
+echo "7️⃣ Retrieving API URL..."
 API_URL=$(aws cloudformation describe-stacks \
     --stack-name "$STACK_NAME" \
     --query 'Stacks[0].Outputs[?OutputKey==`ApiUrl`].OutputValue' \

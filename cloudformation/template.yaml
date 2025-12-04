@@ -1,11 +1,22 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Real Estate ML API - Lambda Deployment'
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Real Estate ML API - Lambda Deployment"
 
 Parameters:
   ModelBucketName:
     Type: String
     Default: real-estate-ml-models
     Description: S3 bucket name for storing ML models
+
+  DeployLambdaResources:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Set to 'true' after uploading lambda-package.zip and sklearn-layer.zip to S3
+
+Conditions:
+  ShouldDeployLambda: !Equals [!Ref DeployLambdaResources, "true"]
 
 Resources:
   # S3 Bucket for Model Storage
@@ -26,7 +37,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -37,7 +48,7 @@ Resources:
       Policies:
         - PolicyName: S3ModelAccess
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
@@ -45,11 +56,15 @@ Resources:
                   - s3:ListBucket
                 Resource:
                   - !GetAtt ModelBucket.Arn
-                  - !Sub '${ModelBucket.Arn}/*'
+                  - !Sub "${ModelBucket.Arn}/*"
 
   # Lambda Function
   RealEstateMLFunction:
     Type: AWS::Lambda::Function
+    Condition: ShouldDeployLambda
+    DependsOn:
+      - ModelBucket
+      - ScikitLearnLayer
     Properties:
       FunctionName: real-estate-ml-api
       Runtime: python3.11
@@ -71,6 +86,8 @@ Resources:
   # Lambda Layer for scikit-learn
   ScikitLearnLayer:
     Type: AWS::Lambda::LayerVersion
+    Condition: ShouldDeployLambda
+    DependsOn: ModelBucket
     Properties:
       LayerName: sklearn-pandas-numpy
       Description: scikit-learn, pandas, numpy for ML
@@ -83,6 +100,7 @@ Resources:
   # API Gateway REST API
   ApiGateway:
     Type: AWS::ApiGatewayV2::Api
+    Condition: ShouldDeployLambda
     Properties:
       Name: RealEstateMLAPI
       ProtocolType: HTTP
@@ -91,31 +109,35 @@ Resources:
   # API Gateway Integration
   ApiIntegration:
     Type: AWS::ApiGatewayV2::Integration
+    Condition: ShouldDeployLambda
     Properties:
       ApiId: !Ref ApiGateway
       IntegrationType: AWS_PROXY
       IntegrationUri: !GetAtt RealEstateMLFunction.Arn
-      PayloadFormatVersion: '2.0'
+      PayloadFormatVersion: "2.0"
 
   # API Gateway Route
   ApiRoute:
     Type: AWS::ApiGatewayV2::Route
+    Condition: ShouldDeployLambda
     Properties:
       ApiId: !Ref ApiGateway
-      RouteKey: 'ANY /{proxy+}'
-      Target: !Sub 'integrations/${ApiIntegration}'
+      RouteKey: "ANY /{proxy+}"
+      Target: !Sub "integrations/${ApiIntegration}"
 
   # API Gateway Default Route
   ApiDefaultRoute:
     Type: AWS::ApiGatewayV2::Route
+    Condition: ShouldDeployLambda
     Properties:
       ApiId: !Ref ApiGateway
-      RouteKey: 'ANY /'
-      Target: !Sub 'integrations/${ApiIntegration}'
+      RouteKey: "ANY /"
+      Target: !Sub "integrations/${ApiIntegration}"
 
   # API Gateway Stage
   ApiStage:
     Type: AWS::ApiGatewayV2::Stage
+    Condition: ShouldDeployLambda
     Properties:
       ApiId: !Ref ApiGateway
       StageName: prod
@@ -124,21 +146,24 @@ Resources:
   # Lambda Permission for API Gateway
   LambdaPermission:
     Type: AWS::Lambda::Permission
+    Condition: ShouldDeployLambda
     Properties:
       FunctionName: !Ref RealEstateMLFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*'
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*"
 
 Outputs:
   ApiUrl:
+    Condition: ShouldDeployLambda
     Description: API Gateway endpoint URL
-    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod'
-  
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod"
+
   ModelBucketName:
     Description: S3 bucket for ML models
     Value: !Ref ModelBucket
-  
+
   LambdaFunctionName:
+    Condition: ShouldDeployLambda
     Description: Lambda function name
     Value: !Ref RealEstateMLFunction
