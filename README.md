@@ -156,9 +156,9 @@ The application is deployed on AWS using serverless architecture with the follow
 │  └───────────────────────────────┘  │
 │  ┌───────────────────────────────┐  │
 │  │    Lambda Layer               │  │
-│  │  - scikit-learn 1.5.2         │  │
-│  │  - pandas 2.2.3               │  │
-│  │  - numpy 2.1.3                │  │
+│  │  - scikit-learn 1.7.2         │  │
+│  │  - pandas 2.3.3               │  │
+│  │  - numpy 2.3.4                │  │
 │  └───────────────────────────────┘  │
 └──────────┬──────────────────────────┘
            │ On cold start
