@@ -152,7 +152,7 @@ The application is deployed on AWS using serverless architecture with the follow
 │  ┌───────────────────────────────┐  │
 │  │   FastAPI + Mangum Adapter    │  │
 │  │   - app.main:app              │  │
-│  │   - app.lambda_handler        │  │
+│  │   - app.lambda_handler.handler│  │
 │  └───────────────────────────────┘  │
 │  ┌───────────────────────────────┐  │
 │  │    Lambda Layer               │  │
