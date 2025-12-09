@@ -118,16 +118,105 @@ real-estate-ml-api/
 └── README.md
 ```
 
-## 7. Deployment Plan
+## 7. AWS Infrastructure
 
-| Stage   | Task                                                | Tool               |
-| ------- | --------------------------------------------------- | ------------------ |
-| Dev     | Local run with uv run uvicorn app.main:app --reload | uv                 |
-| Build   | Package Docker image                                | Docker             |
-| Deploy  | Deploy to Render / Fly.io / Cloudflare Workers      | CI/CD              |
-| Monitor | Log requests and add /health check                  | FastAPI middleware |
+The application is deployed on AWS using serverless architecture with the following components:
 
-## 8. Success Metrics
+### Infrastructure Components
+
+| Component          | Service                | Purpose                                      | Configuration                                  |
+| ------------------ | ---------------------- | -------------------------------------------- | ---------------------------------------------- |
+| **Compute**        | AWS Lambda             | Runs FastAPI application serverlessly        | Python 3.11, 1024MB memory, 30s timeout        |
+| **API**            | API Gateway (HTTP API) | Routes HTTP requests to Lambda               | Proxy integration, prod stage with auto-deploy |
+| **Storage**        | S3                     | Stores ML model files and Lambda packages    | Versioning enabled, public access blocked      |
+| **Dependencies**   | Lambda Layer           | Provides ML libraries (scikit-learn, pandas) | Shared across Lambda invocations               |
+| **Access Control** | IAM Role               | Grants Lambda permissions                    | S3 read access, CloudWatch Logs write access   |
+| **Monitoring**     | CloudWatch Logs        | Captures Lambda execution logs               | Automatic retention via Lambda execution role  |
+
+### Architecture Diagram
+
+```
+┌─────────────┐
+│   Client    │
+└──────┬──────┘
+       │ HTTPS
+       ▼
+┌─────────────────────────────────────┐
+│      API Gateway (HTTP API)         │
+│  /predict, /health, /version        │
+└──────────────┬──────────────────────┘
+               │ Proxy Integration
+               ▼
+┌─────────────────────────────────────┐
+│        AWS Lambda Function          │
+│  ┌───────────────────────────────┐  │
+│  │   FastAPI + Mangum Adapter    │  │
+│  │   - app.main:app              │  │
+│  │   - app.lambda_handler.handler│  │
+│  └───────────────────────────────┘  │
+│  ┌───────────────────────────────┐  │
+│  │    Lambda Layer               │  │
+│  │  - scikit-learn 1.7.2         │  │
+│  │  - pandas 2.3.3               │  │
+│  │  - numpy 2.3.4                │  │
+│  └───────────────────────────────┘  │
+└──────────┬──────────────────────────┘
+           │ On cold start
+           ▼
+┌─────────────────────────────────────┐
+│            S3 Bucket                │
+│  - models/regressor.pkl             │
+│  - models/metadata.json             │
+│  - lambda-package.zip               │
+│  - layers/sklearn-layer.zip         │
+└─────────────────────────────────────┘
+```
+
+### Cold Start Optimization
+
+The Lambda function loads the ML model from S3 on cold start and caches it in memory:
+
+- **First request (cold start)**: ~2-5 seconds (downloads model from S3)
+- **Subsequent requests (warm)**: < 250ms (model cached in memory)
+- **Container reuse**: Lambda containers are reused for ~15 minutes after last invocation
+
+### Cost Considerations
+
+| Resource    | Free Tier                       | Cost After Free Tier           | Estimated Monthly (1000 req/day) |
+| ----------- | ------------------------------- | ------------------------------ | -------------------------------- |
+| Lambda      | 1M requests, 400,000 GB-seconds | $0.20/1M requests + compute    | ~$0.20                           |
+| API Gateway | 1M API calls (12 months)        | $1.00/1M requests              | ~$1.00                           |
+| S3 Storage  | 5GB (12 months)                 | $0.023/GB/month                | < $0.10                          |
+| CloudWatch  | 5GB logs, 3 custom metrics      | $0.50/GB ingested              | < $0.50                          |
+| **Total**   | **Likely free for development** | **~$1-2/month for production** | **$1.80/month**                  |
+
+### Deployment Strategy
+
+The infrastructure is defined in CloudFormation (`cloudformation/template.yaml`) and supports a two-stage deployment:
+
+**Stage 1: Bucket Creation**
+
+- Set `DeployLambdaResources=false`
+- Creates only the S3 bucket
+
+**Stage 2: Lambda Deployment**
+
+- Upload Lambda packages and model to S3
+- Set `DeployLambdaResources=true`
+- Creates Lambda, Layer, API Gateway, and IAM resources
+
+This approach avoids circular dependencies and allows CloudFormation to reference S3 objects that must exist before Lambda creation.
+
+## 8. Deployment Plan
+
+| Stage   | Task                                                | Tool            |
+| ------- | --------------------------------------------------- | --------------- |
+| Dev     | Local run with uv run uvicorn app.main:app --reload | uv              |
+| Build   | Package Docker image                                | Docker          |
+| Deploy  | Deploy to AWS Lambda via CloudFormation             | CloudFormation  |
+| Monitor | Log requests and add /health check                  | CloudWatch Logs |
+
+## 9. Success Metrics
 
 | Metric                 | Target                            |
 | ---------------------- | --------------------------------- |
