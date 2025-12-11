@@ -21,14 +21,11 @@ fi
 echo "   ✅ Model found"
 
 # Create Lambda layer for scikit-learn
-echo "2️⃣ Creating Lambda layer for ML libraries..."
+echo "2️⃣ Creating Lambda layer for scikit-learn only..."
 rm -rf layer/
 mkdir -p layer/python
 uv pip install \
     scikit-learn==1.5.2 \
-    pandas==2.2.3 \
-    numpy==2.1.3 \
-    joblib==1.4.2 \
     --target layer/python \
     --python-platform x86_64-manylinux2014 \
     --python-version "$PYTHON_VERSION"
@@ -44,12 +41,15 @@ rm -rf package/
 mkdir -p package
 cp -r app/ package/
 
-# Install FastAPI dependencies
+# Install FastAPI dependencies + ML libraries (pandas, numpy, joblib)
 uv pip install \
     fastapi==0.115.6 \
     mangum==0.19.0 \
     pydantic==2.10.4 \
     boto3==1.35.80 \
+    pandas==2.2.3 \
+    numpy==2.1.3 \
+    joblib==1.4.2 \
     --target package \
     --python-platform x86_64-manylinux2014 \
     --python-version "$PYTHON_VERSION"

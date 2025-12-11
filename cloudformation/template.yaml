@@ -89,8 +89,8 @@ Resources:
     Condition: ShouldDeployLambda
     DependsOn: ModelBucket
     Properties:
-      LayerName: sklearn-pandas-numpy
-      Description: scikit-learn, pandas, numpy for ML
+      LayerName: sklearn-only
+      Description: scikit-learn only (pandas/numpy in main package)
       Content:
         S3Bucket: !Ref ModelBucketName
         S3Key: layers/sklearn-layer.zip
