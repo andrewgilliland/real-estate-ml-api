@@ -1,2 +1,23 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+
+# Lambda deployment artifacts
+package/
+layer/
+*.zip
+
+# Virtual environments
+.venv/
+venv/
+.uv/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Model files (optional - remove if you want to commit models)
+app/models/*.pkl
+app/models/*.json

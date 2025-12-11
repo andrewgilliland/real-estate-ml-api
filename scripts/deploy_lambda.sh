@@ -12,52 +12,25 @@ echo "🚀 Starting Lambda deployment..."
 echo "📦 Bucket: $BUCKET_NAME"
 echo "🌍 Region: $AWS_REGION"
 
-# Create S3 bucket if it doesn't exist
-echo "1️⃣ Checking S3 bucket..."
-if ! aws s3 ls "s3://$BUCKET_NAME" 2>&1 > /dev/null; then
-    echo "   Creating bucket $BUCKET_NAME..."
-    aws s3 mb "s3://$BUCKET_NAME" --region "$AWS_REGION"
-    
-    # Enable versioning
-    aws s3api put-bucket-versioning \
-        --bucket "$BUCKET_NAME" \
-        --versioning-configuration Status=Enabled \
-        --region "$AWS_REGION"
-    
-    # Block public access
-    aws s3api put-public-access-block \
-        --bucket "$BUCKET_NAME" \
-        --public-access-block-configuration \
-        "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true" \
-        --region "$AWS_REGION"
-    
-    echo "   ✅ Bucket created and configured"
-else
-    echo "   ✅ Bucket already exists"
-fi
-
 # Upload trained model to S3
-echo "2️⃣ Uploading trained model..."
+echo "1️⃣ Checking trained model..."
 if [ ! -f "app/models/regressor.pkl" ]; then
     echo "   ❌ Model not found. Run: uv run python model/train_model.py"
     exit 1
 fi
-aws s3 cp app/models/regressor.pkl "s3://$BUCKET_NAME/models/regressor.pkl"
-aws s3 cp app/models/metadata.json "s3://$BUCKET_NAME/models/metadata.json"
-echo "   ✅ Model uploaded"
+echo "   ✅ Model found"
 
 # Create Lambda layer for scikit-learn
-echo "3️⃣ Creating Lambda layer for ML libraries..."
+echo "2️⃣ Creating Lambda layer for ML libraries..."
 rm -rf layer/
 mkdir -p layer/python
-pip install \
+uv pip install \
     scikit-learn==1.5.2 \
     pandas==2.2.3 \
     numpy==2.1.3 \
     joblib==1.4.2 \
-    -t layer/python \
-    --platform manylinux2014_x86_64 \
-    --only-binary=:all: \
+    --target layer/python \
+    --python-platform x86_64-manylinux2014 \
     --python-version "$PYTHON_VERSION"
 
 cd layer
@@ -66,20 +39,19 @@ cd ..
 echo "   ✅ Layer package created"
 
 # Package Lambda function
-echo "4️⃣ Packaging Lambda function..."
+echo "3️⃣ Packaging Lambda function..."
 rm -rf package/
 mkdir -p package
 cp -r app/ package/
 
 # Install FastAPI dependencies
-pip install \
+uv pip install \
     fastapi==0.115.6 \
     mangum==0.19.0 \
     pydantic==2.10.4 \
     boto3==1.35.80 \
-    -t package \
-    --platform manylinux2014_x86_64 \
-    --only-binary=:all: \
+    --target package \
+    --python-platform x86_64-manylinux2014 \
     --python-version "$PYTHON_VERSION"
 
 cd package
@@ -87,19 +59,32 @@ zip -r ../lambda-package.zip . > /dev/null
 cd ..
 echo "   ✅ Lambda package created"
 
-# Upload Lambda artifacts to S3
-echo "5️⃣ Uploading Lambda artifacts..."
+# Deploy CloudFormation stack (DeployLambdaResources=false first to create bucket)
+echo "4️⃣ Deploying CloudFormation stack (creating S3 bucket)..."
+aws cloudformation deploy \
+    --template-file cloudformation/template.yaml \
+    --stack-name "$STACK_NAME" \
+    --parameter-overrides ModelBucketName="$BUCKET_NAME" DeployLambdaResources="false" \
+    --capabilities CAPABILITY_IAM \
+    --region "$AWS_REGION"
+
+echo "   ✅ Bucket created"
+
+# Upload artifacts to S3
+echo "5️⃣ Uploading artifacts to S3..."
+aws s3 cp app/models/regressor.pkl "s3://$BUCKET_NAME/models/regressor.pkl"
+aws s3 cp app/models/metadata.json "s3://$BUCKET_NAME/models/metadata.json"
 aws s3 cp sklearn-layer.zip "s3://$BUCKET_NAME/layers/sklearn-layer.zip"
 aws s3 cp lambda-package.zip "s3://$BUCKET_NAME/lambda-package.zip"
 rm sklearn-layer.zip lambda-package.zip
 echo "   ✅ Artifacts uploaded"
 
-# Deploy CloudFormation stack
-echo "6️⃣ Deploying CloudFormation stack..."
+# Update stack to deploy Lambda resources
+echo "6️⃣ Updating CloudFormation stack (deploying Lambda resources)..."
 aws cloudformation deploy \
     --template-file cloudformation/template.yaml \
     --stack-name "$STACK_NAME" \
-    --parameter-overrides ModelBucketName="$BUCKET_NAME" \
+    --parameter-overrides ModelBucketName="$BUCKET_NAME" DeployLambdaResources="true" \
     --capabilities CAPABILITY_IAM \
     --region "$AWS_REGION"
 
